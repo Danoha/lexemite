@@ -1,0 +1,15 @@
+{
+	"name": "root",
+	"private": true,
+	"scripts": {
+		"test": "vitest"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^1.9.4",
+		"@tsconfig/strictest": "^2.0.5",
+		"lerna": "^8.1.9",
+		"type-fest": "^4.28.1",
+		"typescript": "^5.7.2",
+		"vitest": "^2.1.5"
+	}
+}
