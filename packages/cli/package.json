@@ -1,0 +1,60 @@
+{
+  "name": "lexemite",
+  "version": "0.1.0",
+  "description": "A fast, language agnostic tool for static analysis of source code.",
+  "type": "module",
+  "bin": {
+    "lexemite": "./lib/cli.js"
+  },
+  "exports": {
+    "./package.json": "./package.json",
+    ".": "./lib/index.js",
+    "./config.js": "./lib/config.js",
+    "./engine.js": "./lib/engine.js",
+    "./plugins/*.js": "./lib/plugins/*.js"
+  },
+  "keywords": [],
+  "author": "Daniel Stříbrný <dan.stribrny@gmail.com>",
+  "homepage": "https://github.com/Danoha/lexemite",
+  "license": "MIT",
+  "directories": {
+    "lib": "lib",
+    "test": "__tests__"
+  },
+  "files": [
+    "lib"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Danoha/lexemite.git"
+  },
+  "scripts": {
+    "test": "vitest",
+    "start": "tsx ./src/cli.ts -c ../../lexemite.config.js"
+  },
+  "bugs": {
+    "url": "https://github.com/Danoha/lexemite/issues"
+  },
+  "dependencies": {
+    "@danoha/supergraph": "workspace:^",
+    "chalk": "^5.4.1",
+    "enhanced-resolve": "^5.18.0",
+    "globby": "^14.0.2",
+    "minimatch": "^10.0.1",
+    "minimist": "^1.2.8",
+    "tapable": "^2.2.1",
+    "tree-sitter": "0.21.1",
+    "tree-sitter-css": "0.21.1",
+    "tree-sitter-html": "0.23.2",
+    "tree-sitter-javascript": "0.23.1",
+    "tree-sitter-json": "0.24.8",
+    "tree-sitter-scss": "1.0.0",
+    "tree-sitter-typescript": "^0.23.2",
+    "tslib": "^2.8.1",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/minimist": "^1.2.5",
+    "tsx": "^4.19.2"
+  }
+}

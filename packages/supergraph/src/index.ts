@@ -1,333 +1,161 @@
-export enum DirectionFlag {
-	Forward = 1,
-	Reverse = 2,
-	Any = 3,
+abstract class Graph<N, E> {
+  constructor(protected superGraph: SuperGraph<N>) {}
+
+  abstract getEdge(a: number, b: number): E | undefined;
+  abstract setEdge(a: number, b: number, value: E): void;
+  abstract removeEdge(a: number, b: number): void;
+
+  getNode(a: number): N | undefined {
+    return this.superGraph.getNode(a);
+  }
+
+  addNode(node: N): number {
+    return this.superGraph.addNode(node);
+  }
 }
 
-export interface GraphLike<TNodeKey, TNode, TEdge> {
-	getNode(key: TNodeKey): TNode | undefined;
-	getNodes(): Iterable<TNodeKey>;
-	getEdges(
-		key: TNodeKey,
-		to?: TNodeKey,
-		direction?: DirectionFlag,
-	): Iterable<readonly [TNodeKey, TEdge]>;
+export class DirectedGraph<N, E> extends Graph<N, E> {
+  #edgesOut: { current: E }[][] = [];
+  #edgesIn: { current: E }[][] = [];
 
-	setNode(key: TNodeKey, node: TNode): void;
-	addEdge(from: TNodeKey, to: TNodeKey, edge: TEdge): void;
-	removeEdge(from: TNodeKey, to: TNodeKey, edge: TEdge): void;
-	clearEdges(from: TNodeKey, to: TNodeKey): void;
+  getEdge(a: number, b: number): E | undefined {
+    return this.#edgesOut[a]?.[b]?.current;
+  }
 
-	bfs(direction: DirectionFlag, ...start: TNodeKey[]): Iterable<TNodeKey>;
-	dfs(direction: DirectionFlag, ...start: TNodeKey[]): Iterable<TNodeKey>;
+  *getOutgoingEdges(a: number): Iterable<[number, E]> {
+    for (const [b, edge] of this.#edgesOut[a]?.entries() ?? []) {
+      if (edge !== undefined) {
+        yield [b, edge.current];
+      }
+    }
+  }
 
-	isReachable(from: TNodeKey, to: TNodeKey, direction?: DirectionFlag): boolean;
-	getUnreachableNodes(
-		from: TNodeKey,
-		direction?: DirectionFlag,
-	): Iterable<TNodeKey>;
+  *getIncomingEdges(a: number): Iterable<[number, E]> {
+    for (const [b, edge] of this.#edgesIn[a]?.entries() ?? []) {
+      if (edge !== undefined) {
+        yield [b, edge.current];
+      }
+    }
+  }
+
+  setEdge(a: number, b: number, value: E) {
+    let edge = this.#edgesOut[a]?.[b];
+
+    if (edge) {
+      edge.current = value;
+      return;
+    }
+
+    edge = { current: value };
+
+    if (!this.#edgesOut[a]) {
+      this.#edgesOut[a] = [];
+    }
+    this.#edgesOut[a][b] = edge;
+
+    if (!this.#edgesIn[b]) {
+      this.#edgesIn[b] = [];
+    }
+    this.#edgesIn[b][a] = edge;
+  }
+
+  removeEdge(a: number, b: number) {
+    const edgesOut = this.#edgesOut[a];
+
+    if (edgesOut) {
+      delete edgesOut[b];
+    }
+
+    const edgesIn = this.#edgesIn[b];
+
+    if (edgesIn) {
+      delete edgesIn[a];
+    }
+  }
+
+  topoSort() {
+    const visited = new Set<number>();
+    const visitedTemp = new Set<number>();
+    const result = new Array<number>(this.superGraph.size);
+    let index = this.superGraph.size - 1;
+
+    const visit = (n: number) => {
+      if (visited.has(n)) {
+        return;
+      }
+      if (visitedTemp.has(n)) {
+        throw new Error('Cannot topologically sort a cyclic graph');
+      }
+      visitedTemp.add(n);
+
+      for (const [m] of this.getOutgoingEdges(n)) {
+        visit(m);
+      }
+
+      visitedTemp.delete(n);
+      visited.add(n);
+
+      result[index--] = n;
+    };
+
+    for (let i = 0; i < this.superGraph.size; i++) {
+      visit(i);
+    }
+
+    return result;
+  }
 }
 
-export abstract class Graph<TNodeKey, TNode, TEdge> {
-	abstract getNodes(): Iterable<TNodeKey>;
-	abstract getEdges(
-		key: TNodeKey,
-		to?: TNodeKey,
-		direction?: DirectionFlag,
-	): Iterable<readonly [TNodeKey, TEdge]>;
+export class UndirectedGraph<N, E> extends Graph<N, E> {
+  #inner = new DirectedGraph<N, E>(this.superGraph);
 
-	*bfs(direction: DirectionFlag, ...start: TNodeKey[]): Iterable<TNodeKey> {
-		const visited = new Set<TNodeKey>();
-		const queue = start;
+  getEdge(a: number, b: number): E | undefined {
+    const min = Math.min(a, b);
+    const max = Math.max(a, b);
 
-		while (queue.length > 0) {
-			// biome-ignore lint/style/noNonNullAssertion: <explanation>
-			const key = queue.shift()!;
+    return this.#inner.getEdge(min, max);
+  }
 
-			if (visited.has(key)) {
-				continue;
-			}
+  *getEdges(a: number): Iterable<[number, E]> {
+    yield* this.#inner.getOutgoingEdges(a);
+    yield* this.#inner.getIncomingEdges(a);
+  }
 
-			visited.add(key);
+  setEdge(a: number, b: number, value: E) {
+    const min = Math.min(a, b);
+    const max = Math.max(a, b);
+    this.#inner.setEdge(min, max, value);
+  }
 
-			yield key;
-
-			for (const [to] of this.getEdges(key, undefined, direction)) {
-				if (!visited.has(to)) {
-					queue.push(to);
-				}
-			}
-		}
-	}
-
-	*dfs(direction: DirectionFlag, ...start: TNodeKey[]): Iterable<TNodeKey> {
-		const visited = new Set<TNodeKey>();
-		const stack = start;
-
-		while (stack.length > 0) {
-			// biome-ignore lint/style/noNonNullAssertion: <explanation>
-			const key = stack.pop()!;
-
-			if (visited.has(key)) {
-				continue;
-			}
-
-			visited.add(key);
-
-			yield key;
-
-			for (const [to] of this.getEdges(key, undefined, direction)) {
-				if (!visited.has(to)) {
-					stack.push(to);
-				}
-			}
-		}
-	}
-
-	isReachable(
-		from: TNodeKey,
-		to: TNodeKey,
-		direction: DirectionFlag = DirectionFlag.Forward,
-	): boolean {
-		for (const node of this.bfs(direction, from)) {
-			if (node === to) {
-				return true;
-			}
-		}
-
-		return false;
-	}
-
-	*getUnreachableNodes(
-		from: TNodeKey,
-		direction: DirectionFlag = DirectionFlag.Forward,
-	): Iterable<TNodeKey> {
-		const reachable = new Set(this.bfs(direction, from));
-
-		for (const node of this.getNodes()) {
-			if (!reachable.has(node)) {
-				yield node;
-			}
-		}
-	}
+  removeEdge(a: number, b: number) {
+    const min = Math.min(a, b);
+    const max = Math.max(a, b);
+    this.#inner.removeEdge(min, max);
+  }
 }
 
-export class UndirectedGraph<TNodeKey, TNode, TEdge>
-	extends Graph<TNodeKey, TNode, TEdge>
-	implements GraphLike<TNodeKey, TNode, TEdge>
-{
-	readonly #nodes = new Map<TNodeKey, TNode>();
-	readonly #edges = new Map<TNodeKey, Map<TNodeKey, Set<TEdge>>>();
+export class SuperGraph<N> {
+  #nodes: N[] = [];
 
-	getNode(key: TNodeKey) {
-		return this.#nodes.get(key);
-	}
+  get size(): number {
+    return this.#nodes.length;
+  }
 
-	getNodes() {
-		return this.#nodes.keys();
-	}
+  getNode(id: number): N | undefined {
+    return this.#nodes[id];
+  }
 
-	*getEdges(key: TNodeKey, to?: TNodeKey) {
-		const edges = this.#edges.get(key);
+  addNode(node: N): number {
+    const id = this.#nodes.length;
+    this.#nodes.push(node);
+    return id;
+  }
 
-		if (edges) {
-			if (to === undefined) {
-				for (const [to, nodeEdges] of edges.entries()) {
-					for (const nodeEdge of nodeEdges) {
-						yield [to, nodeEdge] as const;
-					}
-				}
-			} else {
-				const nodeEdges = edges.get(to);
+  createUndirectedLayer<E>(): UndirectedGraph<N, E> {
+    return new UndirectedGraph<N, E>(this);
+  }
 
-				if (nodeEdges) {
-					for (const nodeEdge of nodeEdges) {
-						yield [to, nodeEdge] as const;
-					}
-				}
-			}
-		}
-	}
-
-	setNode(key: TNodeKey, node: TNode) {
-		this.#nodes.set(key, node);
-	}
-
-	addEdge(from: TNodeKey, to: TNodeKey, edge: TEdge) {
-		const edges = this.#edges;
-
-		function add(n1: TNodeKey, n2: TNodeKey, edge: TEdge) {
-			let map = edges.get(n1);
-
-			if (!map) {
-				map = new Map();
-				edges.set(n1, map);
-			}
-
-			let nodeEdges = map.get(n2);
-
-			if (!nodeEdges) {
-				nodeEdges = new Set();
-				map.set(n2, nodeEdges);
-			}
-
-			nodeEdges.add(edge);
-		}
-
-		add(from, to, edge);
-		add(to, from, edge);
-	}
-
-	removeEdge(from: TNodeKey, to: TNodeKey, edge: TEdge) {
-		this.#edges.get(from)?.get(to)?.delete(edge);
-	}
-
-	clearEdges(from: TNodeKey, to: TNodeKey) {
-		this.#edges.get(from)?.delete(to);
-		this.#edges.get(to)?.delete(from);
-	}
-}
-
-export class DirectedGraph<TNodeKey, TNode, TEdge>
-	extends Graph<TNodeKey, TNode, TEdge>
-	implements GraphLike<TNodeKey, TNode, TEdge>
-{
-	readonly #nodes = new Map<TNodeKey, TNode>();
-	readonly #inEdges = new Map<TNodeKey, Map<TNodeKey, Set<TEdge>>>();
-	readonly #outEdges = new Map<TNodeKey, Map<TNodeKey, Set<TEdge>>>();
-
-	getNode(key: TNodeKey) {
-		return this.#nodes.get(key);
-	}
-
-	getNodes() {
-		return this.#nodes.keys();
-	}
-
-	*getEdges(
-		key: TNodeKey,
-		to?: TNodeKey,
-		direction: DirectionFlag = DirectionFlag.Forward,
-	) {
-		function* iter(source: Map<TNodeKey, Map<TNodeKey, Set<TEdge>>>) {
-			const edges = source.get(key);
-
-			if (!edges) {
-				return;
-			}
-
-			if (to === undefined) {
-				for (const [to, nodeEdges] of edges.entries()) {
-					for (const nodeEdge of nodeEdges) {
-						yield [to, nodeEdge] as const;
-					}
-				}
-			} else {
-				const nodeEdges = edges.get(to);
-
-				if (nodeEdges) {
-					for (const nodeEdge of nodeEdges) {
-						yield [to, nodeEdge] as const;
-					}
-				}
-			}
-		}
-
-		if (direction & DirectionFlag.Forward) {
-			yield* iter(this.#inEdges);
-		}
-
-		if (direction & DirectionFlag.Reverse) {
-			yield* iter(this.#outEdges);
-		}
-	}
-
-	setNode(key: TNodeKey, node: TNode) {
-		this.#nodes.set(key, node);
-	}
-
-	addEdge(from: TNodeKey, to: TNodeKey, edge: TEdge) {
-		function add(
-			target: Map<TNodeKey, Map<TNodeKey, Set<TEdge>>>,
-			n1: TNodeKey,
-			n2: TNodeKey,
-			edge: TEdge,
-		) {
-			let map = target.get(n1);
-
-			if (!map) {
-				map = new Map();
-				target.set(n1, map);
-			}
-
-			let nodeEdges = map.get(n2);
-
-			if (!nodeEdges) {
-				nodeEdges = new Set();
-				map.set(n2, nodeEdges);
-			}
-
-			nodeEdges.add(edge);
-		}
-
-		add(this.#outEdges, from, to, edge);
-		add(this.#inEdges, to, from, edge);
-	}
-
-	removeEdge(from: TNodeKey, to: TNodeKey, edge: TEdge) {
-		this.#outEdges.get(from)?.get(to)?.delete(edge);
-		this.#inEdges.get(to)?.get(from)?.delete(edge);
-	}
-
-	clearEdges(from: TNodeKey, to: TNodeKey) {
-		this.#outEdges.get(from)?.delete(to);
-		this.#inEdges.get(to)?.delete(from);
-	}
-}
-
-export class Node<TKey, TData, TEdge> {
-	readonly #graph: GraphLike<TKey, TData, TEdge>;
-	readonly #key: TKey;
-
-	constructor(graph: GraphLike<TKey, TData, TEdge>, key: TKey, data: TData) {
-		this.#graph = graph;
-		this.#key = key;
-		this.#graph.setNode(this.#key, data);
-	}
-
-	setData(data: TData) {
-		return this.#graph.setNode(this.#key, data);
-	}
-
-	getData() {
-		return this.#graph.getNode(this.#key);
-	}
-
-	getEdges(to?: TKey, direction = DirectionFlag.Forward) {
-		return this.#graph.getEdges(this.#key, to, direction);
-	}
-
-	addEdge(to: TKey, edge: TEdge) {
-		return this.#graph.addEdge(this.#key, to, edge);
-	}
-
-	removeEdge(to: TKey, edge: TEdge) {
-		return this.#graph.removeEdge(this.#key, to, edge);
-	}
-
-	clearEdges(to: TKey) {
-		return this.#graph.clearEdges(this.#key, to);
-	}
-
-	bfs(direction: DirectionFlag) {
-		return this.#graph.bfs(direction, this.#key);
-	}
-
-	dfs(direction: DirectionFlag) {
-		return this.#graph.dfs(direction, this.#key);
-	}
-
-	isReachable(to: TKey, direction: DirectionFlag = DirectionFlag.Forward) {
-		return this.#graph.isReachable(this.#key, to, direction);
-	}
+  createDirectedLayer<E>(): DirectedGraph<N, E> {
+    return new DirectedGraph<N, E>(this);
+  }
 }

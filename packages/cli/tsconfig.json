@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "paths": {
+      "./lib/*": ["./src/*"],
+      "@danoha/supergraph": ["../supergraph/src"]
+    }
+  },
+  "extends": "../../tsconfig.json",
+  "references": [
+    {
+      "path": "../supergraph"
+    }
+  ]
+}
